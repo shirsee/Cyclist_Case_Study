@@ -1,0 +1,206 @@
+#=====================================
+# STEP 1: LOAD PACKAGES AND CSV FILES
+#=====================================
+
+#install packages
+install.packages("tidyverse")
+install.packages("libridate")
+install.packages("ggplot")
+
+#load packages
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+
+#locate directory and load csv files. change the file name to new dataframe name for each csv file
+getwd()
+setwd("C:/Users/Shirsee/Documents")
+q2_2019 <- read_csv("Divvy_Trips_2019_Q2.csv")
+q3_2019 <- read_csv("Divvy_Trips_2019_Q3.csv")
+q4_2019 <- read_csv("Divvy_Trips_2019_Q4.csv")
+q1_2020 <- read_csv("Divvy_Trips_2020_Q1.csv")
+
+#=====================================
+# STEP 2: CLEAN COLUMN NAMES
+#=====================================
+
+#inspect column names for each csv file
+colnames(q3_2019)
+colnames(q4_2019)
+colnames(q2_2019)
+colnames(q1_2020)
+
+#rename column names for q2,q3,q4 to match q1
+(q4_2019 <- rename(q4_2019
+                   ,ride_id = trip_id
+                   ,rideable_type = bikeid 
+                   ,started_at = start_time  
+                   ,ended_at = end_time  
+                   ,start_station_name = from_station_name 
+                   ,start_station_id = from_station_id 
+                   ,end_station_name = to_station_name 
+                   ,end_station_id = to_station_id 
+                   ,member_casual = usertype))
+
+(q3_2019 <- rename(q3_2019
+                   ,ride_id = trip_id
+                   ,rideable_type = bikeid 
+                   ,started_at = start_time  
+                   ,ended_at = end_time  
+                   ,start_station_name = from_station_name 
+                   ,start_station_id = from_station_id 
+                   ,end_station_name = to_station_name 
+                   ,end_station_id = to_station_id 
+                   ,member_casual = usertype))
+
+(q2_2019 <- rename(q2_2019
+                   ,ride_id = "01 - Rental Details Rental ID"
+                   ,rideable_type = "01 - Rental Details Bike ID" 
+                   ,started_at = "01 - Rental Details Local Start Time"  
+                   ,ended_at = "01 - Rental Details Local End Time"  
+                   ,start_station_name = "03 - Rental Start Station Name" 
+                   ,start_station_id = "03 - Rental Start Station ID"
+                   ,end_station_name = "02 - Rental End Station Name" 
+                   ,end_station_id = "02 - Rental End Station ID"
+                   ,gender = "Member Gender"
+                   ,birthyear = "05 - Member Details Member Birthday Year"
+                   ,tripduration = "01 - Rental Details Duration In Seconds Uncapped" 
+                   ,member_casual = "User Type"))
+
+#=====================================
+# STEP 3: CLEAN FORMATS
+#=====================================
+
+#Inspect the dataframe formats
+str(q1_2020)
+str(q4_2019)
+str(q3_2019)
+str(q2_2019)
+
+
+#q1 format is character but all other quarter are number format. change all the formats in q2, q3, q4 to match q1
+
+q4_2019 <-  mutate(q4_2019, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+q3_2019 <-  mutate(q3_2019, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+q2_2019 <-  mutate(q2_2019, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+
+#preview q4 dataframe to inspect the changes has been implemented
+view(q4_2019)
+
+#=====================================
+# STEP 4: CLEAN AND MERGE DATAFRAMES
+#=====================================
+
+#merge all the quarters to single file name as all_trips
+all_trips <- bind_rows(q2_2019, q3_2019, q4_2019, q1_2020)
+
+#preview all_trips dataframe
+view(all_trips)
+
+#inspect the column names for all_trips dataframe
+colnames(all_trips)
+
+#remove unwanted columns that exist in q2, q3, q4 but does not exist in q1
+all_trips <- all_trips %>%  
+  select(-c("start_lat", "start_lng", "end_lat", "end_lng", "birthyear", "gender", "tripduration", "birthyear"))
+
+#count the total number of rows in the merged dataframe
+nrow(all_trips)
+
+#dimentions of the merged dataframe
+dim(all_trips)
+
+summary(all_trips)
+
+#preview the formats in the merged dataframe
+str(all_trips)
+
+#quick peek at the merged dataframe
+head(all_trips)
+
+#replace all the values in member_casual column from subscriber to member and customer to casual
+all_trips <-  all_trips %>% 
+  mutate(member_casual = recode(member_casual
+                           ,"Subscriber" = "member"
+                           ,"Customer" = "casual"))
+#calculate a count of members vs casual
+table(all_trips$member_casual)
+
+#add new columns and name as date, month, day, year, day of week
+all_trips$date <- as.Date(all_trips$started_at)
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+
+#calculate the time difference between end time and start time and name column as ride_length
+all_trips$ride_length <- difftime(all_trips$ended_at,all_trips$started_at)
+
+#Inspect to see the ride_length calculation and newly added columns
+str(all_trips)
+
+#Inspect whether the value in ride_length is a factor or not. The result was false
+is.factor(all_trips$ride_length)
+
+#Convert the values in ride_length to numeric value.
+all_trips$ride_length <- as.numeric(as.character(all_trips$ride_length))
+is.numeric(all_trips$ride_length)
+
+#delete any negative values less than 0 and delete any data with values that shows HR QR and create a cleaned dataframe named as all_trips_v2
+all_trips_v2 <- all_trips[!(all_trips$start_station_name == "HQ QR" | all_trips$ride_length<0),]
+
+#=====================================
+# STEP 4: START ANALYSIS
+#=====================================
+
+mean(all_trips_v2$ride_length)#average ride is 1479
+median(all_trips_v2$ride_length) #middle point is 712
+max(all_trips_v2$ride_length) ##longest ride is 9387024
+min(all_trips_v2$ride_length) ##shortest ride is 1
+summary(all_trips_v2$ride_length)
+
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = mean)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = median)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = max)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = min)
+
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%  
+  group_by(member_casual, weekday) %>%
+  summarise(number_of_rides = n()
+  average_duration = mean(ride_length)) %>%
+  arrange(member_casual, weekday)
+
+#=====================================
+# STEP 5: PLOT ANALYSIS
+#=====================================
+
+#Plotting Number of Rides visulization
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge") + labs(title="Number of Rides",subtitle="member vs casual")
+
+#Plotting Average Duration visualization
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge") + labs(title="Average Duration")
